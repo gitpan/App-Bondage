@@ -1,5 +1,8 @@
+0.2.1 Mon Jan 28 10:14:17 GMT 2008
+    - Pod fixes
+
 0.2.0 Mon Jan 28 06:24:13 GMT 2008
-		- Uploaded to CPAN as App::Bondage
+    - Uploaded to CPAN as App::Bondage
     - Moved most features into separate PoCo-IRC plugins
     - Rewrote a lot of stuff
 
