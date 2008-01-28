@@ -1,0 +1,15 @@
+# http://module-build.sourceforge.net/META-spec.html
+#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
+name:         App-Bondage
+version:      0.2.0
+version_from: lib/App/Bondage/Common.pm
+installdirs:  site
+requires:
+    POE::Component::Client::DNS:   0
+    POE::Component::Daemon:        0
+    POE::Component::IRC:           5.54
+    POE::Filter::IRCD:             2.34
+    YAML::Syck:                    0
+
+distribution_type: module
+generated_by: ExtUtils::MakeMaker version 6.30
