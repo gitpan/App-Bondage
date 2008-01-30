@@ -1,10 +1,10 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         App-Bondage
-version:      0.2.2
+version:      0.2.3
 version_from: lib/App/Bondage/Common.pm
-license:      perl
 installdirs:  site
+license:      perl
 requires:
     POE::Component::Client::DNS:   0
     POE::Component::Daemon:        0
