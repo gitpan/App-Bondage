@@ -2,11 +2,11 @@ package App::Bondage;
 
 use strict;
 use warnings;
+use Carp;
 use Config;
+use Config::Any;
 use App::Bondage::Away;
 use App::Bondage::Client;
-use App::Bondage::Common;
-use App::Bondage::Cycle;
 use App::Bondage::Recall;
 use Digest::MD5 qw(md5_hex);
 use POE qw(Filter::Line Filter::Stackable Wheel::ReadWrite Wheel::SocketFactory);
@@ -16,11 +16,15 @@ use POE::Component::IRC::State;
 use POE::Component::IRC::Plugin::AutoJoin;
 use POE::Component::IRC::Plugin::Connector;
 use POE::Component::IRC::Plugin::CTCP;
+use POE::Component::IRC::Plugin::CycleEmpty;
 use POE::Component::IRC::Plugin::Logger;
 use POE::Component::IRC::Plugin::NickReclaim;
 use POE::Component::IRC::Plugin::NickServID;
 use Socket qw(inet_ntoa);
-use YAML::Syck qw(LoadFile);
+
+our $VERSION    = '0.2.4';
+our $HOMEPAGE   = 'http://search.cpan.org/dist/App-Bondage';
+our $CRYPT_SALT = 'erxpnUyerCerugbaNgfhW';
 
 sub new {
     my ($package, %params) = @_;
@@ -28,7 +32,7 @@ sub new {
     $self->_load_config();
     POE::Session->create(
         object_states => [
-            $self => [ qw(_start _client_error _client_input _listener_accept _listener_failed _sig_hup) ],
+            $self => [ qw(_start _client_error _client_input _listener_accept _listener_failed _reload _exit) ],
         ],
     );
     return $self;
@@ -40,7 +44,7 @@ sub _start {
     $self->{resolver} = POE::Component::Client::DNS->spawn();
     
     while (my ($network_name, $network) = each %{ $self->{config}->{networks} }) {
-        my $irc = $network->{irc} = POE::Component::IRC::State->spawn(
+        my $irc = $self->{ircs}->{$network_name} = POE::Component::IRC::State->spawn(
             LocalAddr => $network->{bind_host},
             Server    => $network->{server_host},
             Port      => $network->{server_port},
@@ -54,31 +58,33 @@ sub _start {
             Debug     => $self->{Debug},
             Raw       => 1,
         );
-        $self->{ircs}->{$network_name} = $irc;
         
         $irc->plugin_add('CTCP',        POE::Component::IRC::Plugin::CTCP->new( Version => "Bondage $VERSION running on $Config{osname} $Config{osvers} -- $HOMEPAGE" ));
+        $irc->plugin_add('Cycle',       POE::Component::IRC::Plugin::CycleEmpty->new()) if $network->{cycle_empty};
         $irc->plugin_add('NickReclaim', POE::Component::IRC::Plugin::NickReclaim->new());
         $irc->plugin_add('Connector',   POE::Component::IRC::Plugin::Connector->new( Delay => 120 ));
         $irc->plugin_add('AutoJoin',    POE::Component::IRC::Plugin::AutoJoin->new(
                                             Channels => $network->{channels},
                                             RejoinOnKick => $network->{kick_rejoin} ));
-        if (exists $network->{nickserv_pass}) {
+        if (defined $network->{nickserv_pass}) {
             $irc->plugin_add('NickServID', POE::Component::IRC::Plugin::NickServID->new(
-                                               Password => $network->{nickserv_pass}, ));
+                                            Password => $network->{nickserv_pass}, ));
         }
         if ($network->{log_public} || $network->{log_private}) {
             my $log_dir = $self->{Work_dir} . '/logs';
             if (! -d $log_dir) {
-                mkdir $log_dir, oct 700 or die "Cannot create directory $log_dir $!; aborted";
+                mkdir $log_dir, oct 700 or croak "Cannot create directory $log_dir $!; aborted";
             }
             $irc->plugin_add('Logger', POE::Component::IRC::Plugin::Logger->new(
-                                           Path => "$log_dir/$network_name",
-                                           Private => $network->{log_private},
-                                           Public => $network->{log_public}, ));
+                                           Path         => "$log_dir/$network_name",
+                                           Private      => $network->{log_private},
+                                           Public       => $network->{log_public},
+                                           Sort_by_date => $network->{log_sortbydate},
+                                           Restricted   => $network->{log_restricted},
+            ));
         }
 
         $irc->plugin_add('Away',   App::Bondage::Away->new( Message => $network->{away_msg}));
-        $irc->plugin_add('Cycle',  App::Bondage::Cycle->new()) if $network->{auto_cycle};
         $irc->plugin_add('Recall', App::Bondage::Recall->new( Mode => $network->{recall_mode} ));
 
         $irc->yield(register => 'all');
@@ -86,7 +92,9 @@ sub _start {
     }
     
     $self->_spawn_listener();
-    $poe_kernel->sig('HUP', '_sig_hup');
+    $poe_kernel->sig(HUP => '_reload');
+    $poe_kernel->sig(INT => '_exit');
+    $poe_kernel->sig(TERM => '_exit');
 }
 
 sub _client_error {
@@ -96,32 +104,31 @@ sub _client_error {
 
 sub _client_input {
     my ($self, $input, $id) = @_[OBJECT, ARG0, ARG1];
+    my $info = $self->{wheels}->{$id};
     
     if ($input->{command} =~ /(PASS)/) {
-        $self->{wheels}->{$id}->{lc $1} = $input->{params}->[0];
+        $info->{lc $1} = $input->{params}->[0];
     }
     elsif ($input->{command} =~ /(NICK|USER)/) {
-        $self->{wheels}->{$id}->{lc $1} = $input->{params}->[0];
-        $self->{wheels}->{$id}->{registered}++;
+        $info->{lc $1} = $input->{params}->[0];
+        $info->{registered}++;
     }
     
-    if ($self->{wheels}->{$id}->{registered} == 2) {
+    if ($info->{registered} == 2) {
         AUTH: {
-            last AUTH if !defined $self->{wheels}->{$id}->{pass};
-            $self->{wheels}->{$id}->{pass} = md5_hex($self->{wheels}->{$id}->{pass}, $CRYPT_SALT) if length $self->{config}->{password} == 32;
-            last AUTH unless $self->{wheels}->{$id}->{pass} eq $self->{config}->{password};
-            my $irc = $self->{ircs}->{$self->{wheels}->{$id}->{nick}};
-            last AUTH unless $irc;
-            
-            $self->{wheels}->{$id}->{wheel}->put($self->{wheels}->{$id}->{nick} . ' NICK :' . $irc->nick_name());
-            $irc->plugin_add("Client_$id", App::Bondage::Client->new( Socket => $self->{wheels}->{$id}->{socket} ));
+            last AUTH if !defined $info->{pass};
+            $info->{pass} = md5_hex($info->{pass}, $CRYPT_SALT) if length $self->{config}->{password} == 32;
+            last AUTH unless $info->{pass} eq $self->{config}->{password};
+            last AUTH unless my $irc = $self->{ircs}->{ $info->{nick} };
+            $info->{wheel}->put($info->{nick} . ' NICK :' . $irc->nick_name());
+            $irc->plugin_add("Client_$id" => App::Bondage::Client->new( Socket => $info->{socket} ));
             $irc->_send_event('irc_proxy_authed' => $id);
             delete $self->{wheels}->{$id};
             return;
         }
         
         # wrong password or nick (network), dump the client
-        $self->{wheels}->{$id}->{wheel}->put('ERROR :Closing Link: * [' . ( $self->{wheels}->{$id}->{user} || 'unknown' ) . '@' . $self->{wheels}->{$id}->{ip} . '] (Unauthorised connection)' );
+        $info->{wheel}->put('ERROR :Closing Link: * [' . ( $info->{user} || 'unknown' ) . '@' . $info->{ip} . '] (Unauthorised connection)' );
         delete $self->{wheels}->{$id};
     }
 }
@@ -144,8 +151,8 @@ sub _listener_accept {
 }
 
 sub _listener_failed {
-    my ($self, $wheel) = @_[OBJECT, ARG3];
-    $self->_spawn_listener();
+    my ($self, $error, $wheel) = @_[OBJECT, ARG2, ARG3];
+    croak "Failed to spawn listener: $error; aborted";
 }
 
 sub _spawn_listener {
@@ -156,31 +163,36 @@ sub _spawn_listener {
         SuccessEvent => '_listener_accept',
         FailureEvent => '_listener_failed',
         Reuse        => 'yes',
-    ) or die "Failed to spawn listener: $!; aborted";
+    );
     
     if ($self->{config}->{listen_ssl}) {
         require POE::Component::SSLify;
         POE::Component::SSLify->import(qw(Server_SSLify SSLify_Options));
         eval { SSLify_Options("bondage.key", "bondage.crt") };
-        die 'Unable to load SSL key (' . $self->{Work_dir} . '/bondage.key) or certificate (' . $self->{Work_dir} . "/bondage.crt): $!; aborted" if $!;
+        croak 'Unable to load SSL key (' . $self->{Work_dir} . '/bondage.key) or certificate (' . $self->{Work_dir} . "/bondage.crt): $!; aborted" if $!;
         eval { $self->{listener} = Server_SSLify($self->{listener}) };
-        die "Unable to SSLify the listener: $!; aborted" if $!;
+        croak "Unable to SSLify the listener: $!; aborted" if $!;
     }
 }
 
 sub _load_config {
     my $self = shift;
-    $YAML::Syck::ImplicitTyping = 1;
-    $self->{config} = LoadFile($self->{Work_dir} . '/config.yml');
+
+    my $cfg = Config::Any->load_files( {
+        use_ext => 1,
+        files   => [ glob($self->{Work_dir} . '/config.*') ],
+    } );
+    $self->{config} = ((values %{$cfg->[0]})[0]);
+
     for my $opt (qw(listen_port password)) {
         if (!defined $self->{config}->{$opt}) {
-            die "Config option '$opt' must be defined; aborted";
+            croak "Config option '$opt' must be defined; aborted";
         }
     }
 }
 
 # reload the config file
-sub _sig_hup {
+sub _reload {
     my $self = shift;
     my $old_config = $self->{config};
     $self->_load_config();
@@ -190,11 +202,27 @@ sub _sig_hup {
     $poe_kernel->sig_handled();
 }
 
+# die gracefully
+sub _exit {
+    my $self = shift;
+    if (defined $self->{resolver}) {
+        delete $self->{listener};
+        $self->{resolver}->shutdown();
+        delete $self->{resolver};
+        while (my ($network, $irc) = each %{ $self->{ircs} }) {
+            $irc->yield(shutdown => 'Killed by user');
+            $irc->yield(unregister => 'all');
+            delete $self->{ircs}->{network};
+        }
+    }
+    $poe_kernel->sig_handled();
+}
+
 1;
 
 =head1 NAME
 
-App::Bondage - A featureful easy-to-use IRC bouncer
+App::Bondage - A featureful IRC bouncer based on POE::Component::IRC
 
 =head1 SYNOPSIS
 
@@ -217,7 +245,7 @@ the code short and (hopefully) well tested by others.
 
 I wrote Bondage because no other IRC bouncer out there fit my needs.
 Either they were missing essential features, or they were implemented
-in an undesirable (if not buggy) way. I've tried to make B<bondage>
+in an undesirable (if not buggy) way. I've tried to make Bondage
 stay out of your way and be as transparent as possible.
 It's supposed to be a proxy, after all.
 
@@ -300,10 +328,9 @@ Bondage will reply to CTCP VERSION requests when you are offline.
 
 =head1 CONFIGURATION
 
-The following options are recognized in the configuration file
-which should (by default) be C<~/.bondage/config.yml>
-
-B<Note>: You may not use tabs for indentation.
+The following options are recognized in the configuration file which
+can be called F<~/.bondage/config.EXT> where EXT is an extension
+recognized by L<Config::Any|Config::Any>.
 
 =over
 
@@ -406,13 +433,13 @@ Your IRC real name, or email, or whatever.
 
 (optional, no default)
 
-A list of all your channels, with an optional password after each colon.
-Every line must include a colon. E.g.:
+A list of all your channels and their passwords.
+Here's an example in L<YAML|YAML> format:
 
  channels:
-   "chan1" :
+   "chan1" : ""
    "chan2" : "password"
-   "chan3" :
+   "chan3" : ""
 
 =item recall_mode
 
@@ -438,6 +465,7 @@ while you were away, regardless of this option.
 
 Set to true if you want Bondage to log all your public messages.
 They will be saved as C<~/.bondage/logs/some_network/#some_channel.log>
+unless you set log_sortbydate to true.
 
 =item log_private
 
@@ -445,8 +473,23 @@ They will be saved as C<~/.bondage/logs/some_network/#some_channel.log>
 
 Set to true if you want Bondage to log all private messages.
 They will be saved as C<~/.bondage/logs/some_network/some_nickname.log>
+unless you set log_sortbydate to true.
 
-=item auto_cycle
+=item log_sortbydate
+
+(optional, default: false)
+
+Set to true if you want Bondage to rotate your logs.
+E.g. a channel log file might look like C<~/.bondage/logs/some_network/#channel/2008-01-30.log>
+
+=item log_restricted
+
+(optional, default: false)
+
+Set this to true if you want Bondage to restrict the read permissions
+on created log files/directories so other users won't be able to access them.
+
+=item cycle_empty
 
 (optional, default: false)
 
@@ -466,6 +509,7 @@ if you get kicked from it.
 
 The following CPAN distributions are required:
 
+ Config-Any
  POE
  POE-Component-Client-DNS
  POE-Component-Daemon
@@ -473,12 +517,22 @@ The following CPAN distributions are required:
  POE-Component-SSLify (only if you need SSL support)
  POE-Filter-IRCD
  Socket6 (only if you need ipv6 support)
- YAML-Syck
 
 =head1 BUGS
 
 Report all bugs, feature requests, etc, here:
-http://code.google.com/p/bondage/issues
+http://rt.cpan.org/Public/Dist/Display.html?Name=App%3A%3ABondage
+
+=head1 TODO
+
+Exit cleanly when clients are attached.
+
+DCC support.
+
+Answer common client requests like WHO/MODE without asking the server,
+so other clients won't be bothered with unnecessary traffic.
+
+Reload the configuration file upon being sent a SIGHUP and do something useful.
 
 =head1 AUTHOR
 
@@ -503,3 +557,4 @@ Other useful IRC bouncers:
  http://irssi.org/documentation/proxy
  http://bip.t1r.net
 
+=cut

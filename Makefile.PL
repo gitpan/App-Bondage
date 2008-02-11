@@ -4,15 +4,15 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME          => 'App::Bondage',
     AUTHOR        => 'Hinrik Örn Sigurðsson <hinrik.sig@gmail.com>',
-    VERSION_FROM  => 'lib/App/Bondage/Common.pm',
+    VERSION_FROM  => 'lib/App/Bondage.pm',
     ABSTRACT_FROM => 'lib/App/Bondage.pm',
     LICENSE       => 'perl',
     EXE_FILES     => [ 'bin/bondage' ],
     PREREQ_PM     => {
-        'POE::Component::Client::DNS' => '0',
+        'POE::Component::Client::DNS' => '0.99',
         'POE::Component::Daemon'      => '0',
-        'POE::Component::IRC'         => '5.54', 
+        'POE::Component::IRC'         => '5.62',
         'POE::Filter::IRCD'           => '2.34',
-        'YAML::Syck'                  => '0',
+        'Config::Any'                 => '0.11',
     }
 );

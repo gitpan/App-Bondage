@@ -42,6 +42,8 @@ sub PCI_register {
 }
 
 sub PCI_unregister {
+    my ($self, $irc) = @_;
+    $self->_close_wheel();
     return 1;
 }
 
@@ -67,14 +69,14 @@ sub _start {
 
 sub _client_error {
     my ($self, $id) = @_[OBJECT, ARG3];
-    $self->_close_wheel();
+    #$self->{irc}->plugin_del($self) if defined $self->{wheel};
 }
 
 sub _client_input {
     my ($self, $input) = @_[OBJECT, ARG0];
     
     if ($input->{command} eq 'QUIT') {
-        $self->_close_wheel();
+        $self->{irc}->plugin_del($self);
         return;
     }
     elsif ($input->{command} eq 'PING') {
@@ -102,7 +104,6 @@ sub _close_wheel {
     my $self = shift;
     $self->{irc}->send_event('irc_proxy_close' => $self->{wheel}->ID());
     delete $self->{wheel};
-    $self->{irc}->plugin_del($self);
 }
 
 sub S_raw {
@@ -155,7 +156,7 @@ plugin_add() method.
 
 One argument:
 
- An IRC protocol line
+An IRC protocol line
 
 Sends an IRC protocol line to the client
 
@@ -165,3 +166,4 @@ Sends an IRC protocol line to the client
 
 Hinrik E<Ouml>rn SigurE<eth>sson, hinrik.sig@gmail.com
 
+=cut

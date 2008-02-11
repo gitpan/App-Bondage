@@ -3,12 +3,14 @@ package App::Bondage::Recall;
 use strict;
 use warnings;
 use Carp;
+use File::Temp qw(tempfile);
+use POE::Component::IRC::Common qw( parse_user );
 use POE::Component::IRC::Plugin qw( :ALL );
 use POE::Component::IRC::Plugin::BotTraffic;
-use POE::Component::IRC::Common qw( parse_user );
 use POE::Filter::IRCD;
+use Tie::File;
 
-our $VERSION = '1.1';
+our $VERSION = '1.2';
 
 sub new {
     my ($package, %self) = @_;
@@ -33,6 +35,7 @@ sub PCI_register {
     $self->{filter} = POE::Filter::IRCD->new();
     $self->{clients} = 0;
     $self->{recall} = [ ];
+    tie @{ $self->{recall} }, 'Tie::File', scalar tempfile() if $self->{Mode} =~ /(all|missed)/;
     $irc->raw_events(1);
   
     $irc->plugin_register($self, 'SERVER', qw(bot_ctcp_action bot_public connected ctcp_action msg part proxy_authed proxy_close raw));
@@ -51,7 +54,7 @@ sub S_bot_ctcp_action {
     my $msg = ${ $_[1] };
     
     if ($self->{Mode} =~ /(all|missed)/) {
-        my $line = ':' . $irc->nick_long_form($irc->nick_name()) . " PRIVMSG $recipients :\001ACTION $msg\001";
+        my $line = ':' . $irc->nick_long_form($irc->nick_name()) . " PRIVMSG $recipients :\x01ACTION $msg\x01";
         push @{ $self->{recall} }, $line;
     }
     
@@ -83,11 +86,11 @@ sub S_ctcp_action {
     my $sender = ${ $_[0] };
     my $recipients = ${ $_[1] };
     my $msg = ${ $_[2] };
-    return if $self->{clients};
+    return PCI_EAT_NONE if $self->{clients};
     
     for my $recipient (@{ $recipients }) {
         if ($recipient eq $irc->nick_name()) {
-            my $line = ":$sender PRIVMSG " . $irc->nick_name() . " :\001ACTION$msg\001";
+            my $line = ":$sender PRIVMSG " . $irc->nick_name() . " :\x01ACTION$msg\x01";
             push @{ $self->{recall} }, $line;
         }
     }
@@ -109,9 +112,9 @@ sub S_msg {
 
 sub S_part {
     my ($self, $irc) = splice @_, 0, 2;
-    my $chan = ${ $_[0] };
+    my $chan = ${ $_[1] };
 
-    if (my $cycle = grep { $_->isa('App::Bondage::Cycle') } @{ $irc->pipeline->{PIPELINE} } ) {
+    if (my $cycle = grep { $_->isa('POE::Component::IRC::Plugin::CycleEmpty') } @{ $irc->pipeline->{PIPELINE} } ) {
         return PCI_EAT_NONE if $cycle->cycling($chan);
     }
 
@@ -119,7 +122,13 @@ sub S_part {
         # remove all messages related to this channel
         my $input = $self->{filter}->get( $self->{recall} );
         for my $line (0..$#{ $self->{recall} }) {
-            if ($input->[$line]->{params}->[0] eq $chan) {
+            if (lc $input->[$line]->{params}->[0] eq lc $chan) {
+                delete $self->{recall}->[$line];
+            }
+            elsif ($input->[$line]->{command} =~ /(332|333|366)/ && lc $input->[$line]->{params}->[1] eq lc $chan) {
+                delete $self->{recall}->[$line];
+            }
+            elsif ($input->[$line]->{command} eq '353' && lc $input->[$line]->{params}->[2] eq lc $chan) {
                 delete $self->{recall}->[$line];
             }
         }
@@ -177,7 +186,7 @@ sub S_raw {
         }
         elsif ($input->{command} =~ /(332|333)/) {
             # only log topic stuff if we were just joining the channel
-            push @{ $self->{recall} }, $raw_line if !$irc->channel_list($input->{params}->{0});
+            push @{ $self->{recall} }, $raw_line if !$irc->channel_list($input->{params}->[0]);
         }
     }
         
@@ -251,13 +260,13 @@ sub recall {
         # remove the old PMs, since we've seen 'em now
         for my $line (0..$#{ $self->{recall} }) {
             my $in = shift @{ $self->{filter}->get( $self->{recall} ) };
-            if ($in->{command} eq 'PRIVMSG' && $in->{params}->{0} !~ /^[#&+!]/) {
+            if ($in->{command} eq 'PRIVMSG' && $in->{params}->[0] !~ /^[#&+!]/) {
                 delete $self->{recall}->[$line];
             }
         }
 
     }
-    if ($self->{Mode} eq 'missed') {
+    elsif ($self->{Mode} eq 'missed') {
         $self->{recall} = [ ];
         push @{ $self->{recall} }, $self->_get_chaninfo();
     }
@@ -314,3 +323,4 @@ plugin_add() method.
 
 Hinrik E<Ouml>rn SigurE<eth>sson, hinrik.sig@gmail.com
 
+=cut
