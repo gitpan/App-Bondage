@@ -65,11 +65,14 @@ sub _start {
     
     my ($recall) = grep { $_->isa('App::Bondage::Recall') } @{ $self->{irc}->pipeline->{PIPELINE} };
     $self->{wheel}->put($recall->recall());
+    
+    return;
 }
 
 sub _client_error {
     my ($self, $id) = @_[OBJECT, ARG3];
     #$self->{irc}->plugin_del($self) if defined $self->{wheel};
+    return;
 }
 
 sub _client_input {
@@ -98,12 +101,15 @@ sub _client_input {
         }
     }
     $self->{irc}->yield(lc($input->{command}) => @{ $input->{params} });
+    
+    return;
 }
 
 sub _close_wheel {
     my $self = shift;
     $self->{irc}->send_event('irc_proxy_close' => $self->{wheel}->ID());
     delete $self->{wheel};
+    return;
 }
 
 sub S_raw {
@@ -116,9 +122,11 @@ sub S_raw {
 sub put {
     my ($self, $raw_line) = @_;
     $self->{wheel}->put($raw_line);
+    return;
 }
 
 1;
+__END__
 
 =head1 NAME
 
@@ -139,20 +147,26 @@ It handles a input/output and disconnects from a proxy client.
 This plugin requires the IRC component to be L<POE::Component::IRC::State|POE::Component::IRC::State>
 or a subclass thereof.
 
+=head1 CONSTRUCTOR
+
+=over
+
+=item C<new>
+
+One argument:
+
+'Socket', the socket of the proxy client.
+
+Returns a plugin object suitable for feeding to L<POE::Component::IRC|POE::Component::IRC>'s
+C<plugin_add()> method.
+
+=back
+
 =head1 METHODS
 
 =over
 
-=item new
-
-One argument:
-
- 'Socket', the socket of the proxy client.
-
-Returns a plugin object suitable for feeding to L<POE::Component::IRC|POE::Component::IRC>'s
-plugin_add() method.
-
-=item put
+=item C<put>
 
 One argument:
 
