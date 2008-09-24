@@ -1,16 +1,25 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         App-Bondage
-version:      0.2.5
-version_from: lib/App/Bondage.pm
-installdirs:  site
-license:      perl
-requires:
+--- #YAML:1.0
+name:                App-Bondage
+version:             0.3.0
+abstract:            A featureful IRC bouncer based on POE::Component::IRC
+license:             perl
+author:              
+    - Hinrik Örn Sigurðsson <hinrik.sig@gmail.com>
+generated_by:        ExtUtils::MakeMaker version 6.42
+distribution_type:   module
+requires:     
+    Carp:                          0
+    Config:                        0
     Config::Any:                   0.11
+    Digest::MD5:                   0
+    File::Spec:                    0
+    File::Temp:                    0
     POE::Component::Client::DNS:   0.99
     POE::Component::Daemon:        0
-    POE::Component::IRC:           5.62
+    POE::Component::IRC:           5.88
     POE::Filter::IRCD:             2.34
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.30
+    Test::More:                    0
+    Tie::File:                     0
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3
