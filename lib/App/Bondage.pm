@@ -24,7 +24,7 @@ use POE::Component::IRC::Plugin::NickReclaim;
 use POE::Component::IRC::Plugin::NickServID;
 use Socket qw(inet_ntoa);
 
-our $VERSION    = '0.4.0';
+our $VERSION    = '0.4.1';
 our $HOMEPAGE   = 'http://search.cpan.org/perldoc?App::Bondage';
 our $CRYPT_SALT = 'erxpnUyerCerugbaNgfhW';
 
@@ -606,10 +606,6 @@ http://rt.cpan.org/Public/Dist/Display.html?Name=App%3A%3ABondage
 =head1 TODO
 
 DCC send forwarding support.
-
-Answer common client requests like WHO/MODE without asking the server,
-so other clients won't be bothered with unnecessary traffic. Look into
-irssi's command redirection feature.
 
 Reload the configuration file upon being sent a SIGHUP.
 

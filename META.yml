@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                App-Bondage
-version:             0.4.0
+version:             0.4.1
 abstract:            A featureful IRC bouncer based on POE::Component::IRC
 license:             perl
 author:              
@@ -9,7 +9,6 @@ generated_by:        ExtUtils::MakeMaker version 6.42
 distribution_type:   module
 requires:     
     Carp:                          0
-    Config:                        0
     Config::Any:                   0.11
     Digest::MD5:                   0
     File::Spec:                    0

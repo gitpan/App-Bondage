@@ -1,3 +1,7 @@
+0.4.1 Tue Sep 30 19:23:43 GMT 2008
+    - Fixed a serious typo
+    - Some pod updates
+
 0.4.0 Tue Sep 30 17:00:29 GMT 2008
     - Don't forward PING/PONG server messages
     - Generate various server replies without contacting the server.
@@ -21,7 +25,7 @@
     - Handle the CAPAB IDENTIFY-MSG feature smoothly
     - Make recall keep track of channel topic changes
     - Remove a debugging print statement, doh
-    - Should detach from the terminal now when using --debug
+    - Should detach from the terminal now when not using --debug
     - Moved 'bondage' from bin/ to script/ since it's not a binary
     - Prettified some of the pod
     - Exit cleanly upon getting SIGINT when clients are attached
