@@ -8,6 +8,7 @@ use Config::Any;
 use App::Bondage::Away;
 use App::Bondage::Client;
 use App::Bondage::Recall;
+use App::Bondage::State;
 use Digest::MD5 qw(md5_hex);
 use File::Spec;
 use POE qw(Filter::Line Filter::Stackable Wheel::ReadWrite Wheel::SocketFactory);
@@ -23,7 +24,7 @@ use POE::Component::IRC::Plugin::NickReclaim;
 use POE::Component::IRC::Plugin::NickServID;
 use Socket qw(inet_ntoa);
 
-our $VERSION    = '0.3.3';
+our $VERSION    = '0.4.0';
 our $HOMEPAGE   = 'http://search.cpan.org/perldoc?App::Bondage';
 our $CRYPT_SALT = 'erxpnUyerCerugbaNgfhW';
 
@@ -62,6 +63,7 @@ sub _start {
             Nick         => $network->{nickname},
             Username     => $network->{username},
             Ircname      => $network->{realname},
+            AwayPoll     => $network->{away_poll},
             Resolver     => $self->{resolver},
             Debug        => $self->{Debug},
             plugin_debug => $self->{Debug},
@@ -98,7 +100,8 @@ sub _start {
             ));
         }
 
-        $irc->plugin_add('Away',   App::Bondage::Away->new( Message => $network->{away_msg}));
+        $irc->plugin_add('State',  App::Bondage::State->new());
+        $irc->plugin_add('Away',   App::Bondage::Away->new( Message => $network->{away_msg}) );
         $irc->plugin_add('Recall', App::Bondage::Recall->new( Mode => $network->{recall_mode} ));
 
         $irc->yield('connect');
@@ -544,6 +547,21 @@ opless channels if they become empty.
 
 Set to true if you want Bondage to try to rejoin a channel (once)
 if you get kicked from it.
+
+=head3 C<away_poll>
+
+(optional, default: false)
+
+The interval, in seconds, in which to update information on channel
+members' away status.
+
+Some IRC clients (e.g. xchat) periodically issue a C<WHO #channel> to
+update the away status of channel members. Since Bondage caches this
+information and replies to such requests without contacting the IRC
+server, clients like xchat will not get up-to-date information about
+the away status. On the other hand, this saves lots of traffic if you
+don't care about that functionality. But if you do make use of it, set
+this value to, say, 300 (which is what xchat uses).
 
 =head1 METHODS
 

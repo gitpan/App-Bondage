@@ -4,10 +4,11 @@ use strict;
 use warnings;
 use Carp;
 use POE qw(Filter::Line Filter::Stackable);
+use POE::Component::IRC::Common qw( u_irc );
 use POE::Component::IRC::Plugin qw( :ALL );
 use POE::Filter::IRCD;
 
-our $VERSION = '1.2';
+our $VERSION = '1.3';
 
 sub new {
     my ($package, %self) = @_;
@@ -27,14 +28,16 @@ sub PCI_register {
     if (!grep { $_->isa('App::Bondage::Recall') } values %{ $irc->plugin_list() } ) {
         die __PACKAGE__ . " requires App::Bondage::Recall\n";
     }
-    
-    $self->{filter} = POE::Filter::Stackable->new(
+   
+    $self->{filter} = POE::Filter::IRCD->new(); 
+    $self->{stacked} = POE::Filter::Stackable->new(
         Filters => [
             POE::Filter::Line->new(),
             POE::Filter::IRCD->new(),
         ]
     );
     
+    ($self->{state}) = grep { $_->isa('App::Bondage::State') } values %{ $irc->plugin_list() };
     $self->{irc} = $irc;
     $irc->raw_events(1);
     $irc->plugin_register($self, 'SERVER', qw(raw));
@@ -62,7 +65,7 @@ sub _start {
 
     $self->{wheel} = POE::Wheel::ReadWrite->new(
         Handle       => $self->{Socket},
-        InputFilter  => $self->{filter},
+        InputFilter  => $self->{stacked},
         OutputFilter => POE::Filter::Line->new(),
         InputEvent   => '_client_input',
         ErrorEvent   => '_client_error',
@@ -70,7 +73,7 @@ sub _start {
     delete $self->{Socket};
     $self->{wheel_id} = $self->{wheel}->ID();
 
-    my ($recall_plug) = grep { $_->isa('App::Bondage::Recall') } @{ $self->{irc}->pipeline->{PIPELINE} };
+    my ($recall_plug) = grep { $_->isa('App::Bondage::Recall') } values %{ $self->{irc}->plugin_list() };
     $self->{wheel}->put($recall_plug->recall());
     
     return;
@@ -95,6 +98,7 @@ sub _client_error {
 sub _client_input {
     my ($self, $input) = @_[OBJECT, ARG0];
     my $irc = $self->{irc};
+    my $state = $self->{state};
     
     if ($input->{command} eq 'QUIT') {
         $irc->plugin_del($self);
@@ -111,11 +115,48 @@ sub _client_input {
             # other clients to see
             my $line = ':' . $irc->nick_long_form($irc->nick_name()) . " PRIVMSG $recipient :$msg";
             
-            for my $client (grep { $_->isa('App::Bondage::Client') } @{ $irc->pipeline->{PIPELINE} } ) {
-                if ($client != $self) {
-                    $client->put($line);
+            for my $client (grep { $_->isa('App::Bondage::Client') } values %{ $irc->plugin_list() } ) {
+                $client->put($line) if $client != $self;
+            }
+        }
+    }
+    elsif ($input->{command} eq 'WHO') {
+        if ($input->{params}->[0] && $input->{params}->[0] !~ tr/*//) {
+            if (!$input->{params}->[1]) {
+                if ($input->{params}->[0] !~ /^[#&+!]/ || $irc->channel_list($input->{params}->[0])) {
+                    $state->enqueue(sub { $self->put($_[0]) }, 'who_reply', $input->{params}->[0]);
+                    return;
                 }
             }
+        }
+    }
+    elsif ($input->{command} eq 'MODE') {
+        if ($input->{params}->[0]) {
+            my $mapping = $irc->isupport('CASEMAPPING');
+            if (u_irc($input->{params}->[0], $mapping) eq u_irc($irc->nick_name(), $mapping)) {
+                if (!$input->{params}->[1]) {
+                    $self->put($state->mode_reply($input->params->[0]));
+                    return;
+                }
+            }
+            elsif ($input->{params}->[0] =~ /^[#&+!]/ && $irc->channel_list($input->{params}->[0])) {
+                if (!$input->{params}->[1] || $input->{params}->[1] =~ /^[eIb]$/) {
+                    $state->enqueue(sub { $self->put($_[0]) }, 'mode_reply', @{ $input->{params} }[0,1]);
+                    return;
+                }
+            }
+        }
+    }
+    elsif ($input->{command} eq 'NAMES') {
+        if ($irc->channel_list($input->{params}->[0]) && !$input->{params}->[1]) {
+            $state->enqueue(sub { $self->put($_[0]) }, 'names_reply', $input->{params}->[0]);
+            return;
+        }
+    }
+    elsif ($input->{command} eq 'TOPIC') {
+        if ($irc->channel_list($input->{params}->[0]) && !$input->{params}->[1]) {
+            $state->enqueue(sub { $self->put($_[0]) }, 'topic_reply', $input->{params}->[0]);
+            return;
         }
     }
     
@@ -127,7 +168,10 @@ sub _client_input {
 sub S_raw {
     my ($self, $irc) = splice @_, 0, 2;
     my $raw_line = ${ $_[0] };
-    $self->{wheel}->put($raw_line) if defined $self->{wheel};
+    return PCI_EAT_NONE if !defined $self->{wheel};
+
+    my $input = $self->{filter}->get( [ $raw_line ] )->[0]; 
+    $self->{wheel}->put($raw_line) if $input->{command} !~ /^(?:PING|PONG)/;
     return PCI_EAT_NONE;
 }
 
