@@ -40,7 +40,7 @@ sub PCI_register {
     tie @{ $self->{recall} }, 'Tie::File', scalar tempfile() if $self->{Mode} =~ /all|missed/;
     
     $irc->raw_events(1);
-    $irc->plugin_register($self, 'SERVER', qw(bot_ctcp_action bot_public connected ctcp_action msg public part proxy_authed proxy_close raw));
+    $irc->plugin_register($self, 'SERVER', qw(290 bot_ctcp_action bot_public connected ctcp_action msg public part proxy_authed proxy_close raw));
     return 1;
 }
 
@@ -48,6 +48,13 @@ sub PCI_unregister {
     my ($self, $irc) = @_;
     delete $self->{irc};
     return 1;
+}
+
+sub S_290 {
+    my ($self, $irc) = splice @_, 0, 2;
+    my $text         = ${ $_[0] };
+    $self->{idmsg} = 1;
+    return PCI_EAT_NONE;
 }
 
 sub S_bot_ctcp_action {
@@ -128,14 +135,14 @@ sub S_part {
 #        # remove all messages related to this channel
 #        my $input = $self->{filter}->get( $self->{recall} );
 #        for my $line (0..$#{ $self->{recall} }) {
-#            if (lc $input->[$line]->{params}->[0] eq lc $chan) {
-#                delete $self->{recall}->[$line];
+#            if (lc $input->[$line]{params}[0] eq lc $chan) {
+#                delete $self->{recall}[$line];
 #            }
-#            elsif ($input->[$line]->{command} =~ /332|333|366/ && lc $input->[$line]->{params}->[1] eq lc $chan) {
-#                delete $self->{recall}->[$line];
+#            elsif ($input->[$line]{command} =~ /332|333|366/ && lc $input->[$line]{params}[1] eq lc $chan) {
+#                delete $self->{recall}[$line];
 #            }
-#            elsif ($input->[$line]->{command} eq '353' && lc $input->[$line]->{params}->[2] eq lc $chan) {
-#                delete $self->{recall}->[$line];
+#            elsif ($input->[$line]{command} eq '353' && lc $input->[$line]{params}->[2] eq lc $chan) {
+#                delete $self->{recall}[$line];
 #            }
 #        }
 #    }
@@ -197,17 +204,17 @@ sub S_raw {
     }
     
     if ($self->{Mode} =~ /all|missed/) {
-        if ($input->{command} eq 'MODE' && $input->{params}->[0] =~ /^[#&+!]/) {
+        if ($input->{command} eq 'MODE' && $input->{params}[0] =~ /^[#&+!]/) {
             # channel mode changes
             push @{ $self->{recall} }, $raw_line;
         }
-        elsif ($input->{command} =~ /JOIN|KICK|PART|QUIT|NICK|TOPIC|353|366/) {
+        elsif ($input->{command} =~ /JOIN|KICK|PART|QUIT|NICK|TOPIC/) {
             # other channel-related things
             push @{ $self->{recall} }, $raw_line;
         }
-        elsif ($input->{command} =~ /332|333/) {
-            # only log topic stuff if we were just joining the channel
-            push @{ $self->{recall} }, $raw_line if !$irc->channel_list($input->{params}->[0]);
+        elsif ($input->{command} =~ /332|333|353|366/) {
+            # only log these when we've just joined the channel
+            push @{ $self->{recall} }, $raw_line if $self->{state}->is_syncing($input->{params}[0]);
         }
     }
         
@@ -245,15 +252,15 @@ sub recall {
     }
     
     push @lines, ":$server MODE $me :" . $irc->umode() if $irc->umode();
-    push @lines, ":$server 290 $me :IDENTIFY-MSG" if $self->{idmsg};
     push @lines, @{ $self->{recall} };
+    push @lines, ":$server 290 $me :IDENTIFY-MSG" if $self->{idmsg};
 
     if ($self->{Mode} eq 'all' && $#{ $self->{recall} } > $self->{last_detach}) {
         # remove all PMs received since we last detached
         for my $line ($self->{last_detach} .. $#{ $self->{recall} }) {
             my $in = shift @{ $self->{filter}->get( $self->{recall} ) };
-            if ($in->{command} eq 'PRIVMSG' && $in->{params}->[0] !~ /^[#&+!]/) {
-                delete $self->{recall}->[$line];
+            if ($in->{command} eq 'PRIVMSG' && $in->{params}[0] !~ /^[#&+!]/) {
+                delete $self->{recall}[$line];
             }
         }
     }
@@ -285,12 +292,10 @@ with the messages they missed while they were away.
 
 =head1 DESCRIPTION
 
-App::Bondage::Recall is a L<POE::Component::IRC|POE::Component::IRC> plugin.
-It uses on Log::Log4perl to log messages and CTCP ACTIONs to either
-F<#some_channel.log> or F<some_nickname.log> in the supplied path.
-
-This plugin requires the IRC component to be L<POE::Component::IRC::State|POE::Component::IRC::State>
-or a subclass thereof. It also requires a L<POE::Component::IRC::Plugin::BotTraffic|POE::Component::IRC::Plugin::BotTraffic>
+This plugin requires the IRC component to be
+L<POE::Component::IRC::State|POE::Component::IRC::State> or a subclass thereof.
+It also requires a
+L<POE::Component::IRC::Plugin::BotTraffic|POE::Component::IRC::Plugin::BotTraffic>
 to be in the plugin pipeline. It will be added automatically if it is not present.
 
 =head1 METHODS
@@ -299,14 +304,14 @@ to be in the plugin pipeline. It will be added automatically if it is not presen
 
 One optional argument:
 
-'Mode', which public messages you want it to recall. 'missed', the default,
-makes it only recall public messages that were received while no proxy client
-was attached. 'all' will recall public messages from all channels since they
-were joined. 'none' will recall none. The plugin will always recall missed
-private messages, regardless of this option.
+B<'Mode'>, which public messages you want it to recall. B<'missed'>, the
+default, makes it only recall public messages that were received while no
+proxy client was attached. B<'all'> will recall public messages from all
+channels since they were joined. B<'none'> will recall none. The plugin will
+always recall missed private messages, regardless of this option.
 
-Returns a plugin object suitable for feeding to L<POE::Component::IRC|POE::Component::IRC>'s
-C<plugin_add()> method.
+Returns a plugin object suitable for feeding to
+L<POE::Component::IRC|POE::Component::IRC>'s C<plugin_add()> method.
 
 =head1 AUTHOR
 

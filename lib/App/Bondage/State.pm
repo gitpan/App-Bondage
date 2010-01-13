@@ -44,10 +44,10 @@ sub S_join {
     my $uchan = u_irc(${ $_[1] }, $mapping);
     
     if ($unick eq u_irc($irc->nick_name(), $mapping)) {
-        $self->{syncing_join}->{$uchan} = 1;
+        $self->{syncing_join}{$uchan} = 1;
     }
     else {
-        $self->{syncing_join}->{$unick}++;
+        $self->{syncing_join}{$unick}++;
     }
 
     return PCI_EAT_NONE;
@@ -58,7 +58,7 @@ sub S_away_sync_start {
     my $mapping = $irc->isupport('CASEMAPPING');
     my $uchan = u_irc(${ $_[0] }, $mapping);
 
-    $self->{syncing_away}->{$uchan} = 1;
+    $self->{syncing_away}{$uchan} = 1;
     return PCI_EAT_NONE;
 }
 
@@ -67,7 +67,7 @@ sub S_away_sync_end {
     my $mapping = $irc->isupport('CASEMAPPING');
     my $uchan = u_irc(${ $_[0] }, $mapping);
 
-    delete $self->{syncing_away}->{$uchan};
+    delete $self->{syncing_away}{$uchan};
     return PCI_EAT_NONE;
 }
 
@@ -81,8 +81,8 @@ sub S_chan_mode {
     if ($mode =~ /\+o/) {
         my @operands = split / /, ${ $_[3] };
         if (grep { u_irc($_, $mapping) eq $unick } @operands) {
-            $self->{syncing_op}->{$uchan}->{invex} = 1;
-            $self->{syncing_op}->{$uchan}->{excepts} = 1;
+            $self->{syncing_op}{$uchan}{invex} = 1;
+            $self->{syncing_op}{$uchan}{excepts} = 1;
         }
     }
 
@@ -94,8 +94,8 @@ sub S_chan_sync {
     my $mapping = $irc->isupport('CASEMAPPING');
     my $uchan = u_irc(${ $_[0] }, $mapping);
     
-    delete $self->{syncing_join}->{$uchan};
-    $self->_flush_queue($self->{join_queue}->{$uchan});
+    delete $self->{syncing_join}{$uchan};
+    $self->_flush_queue($self->{join_queue}{$uchan});
     return PCI_EAT_NONE;
 }
 
@@ -104,9 +104,9 @@ sub S_chan_sync_invex {
     my $mapping = $irc->isupport('CASEMAPPING');
     my $uchan = u_irc(${ $_[0] }, $mapping);
 
-    $self->_flush_queue($self->{op_queue}->{$uchan}->{invex});
-    delete $self->{syncing_op}->{$uchan}->{invex};
-    delete $self->{syncing_op}->{$uchan} if !keys %{ $self->{syncing_op}->{$uchan} };
+    $self->_flush_queue($self->{op_queue}{$uchan}{invex});
+    delete $self->{syncing_op}{$uchan}{invex};
+    delete $self->{syncing_op}{$uchan} if !keys %{ $self->{syncing_op}{$uchan} };
     return PCI_EAT_NONE;
 }
 
@@ -115,9 +115,9 @@ sub S_chan_sync_excepts {
     my $mapping = $irc->isupport('CASEMAPPING');
     my $uchan = u_irc(${ $_[0] }, $mapping);
 
-    $self->_flush_queue($self->{op_queue}->{$uchan}->{excepts});
-    delete $self->{syncing_op}->{$uchan}->{excepts};
-    delete $self->{syncing_op}->{$uchan} if !keys %{ $self->{syncing_op}->{$uchan} };
+    $self->_flush_queue($self->{op_queue}{$uchan}{excepts});
+    delete $self->{syncing_op}{$uchan}{excepts};
+    delete $self->{syncing_op}{$uchan} if !keys %{ $self->{syncing_op}{$uchan} };
     return PCI_EAT_NONE;
 }
 
@@ -126,9 +126,9 @@ sub S_nick_sync {
     my $mapping = $irc->isupport('CASEMAPPING');
     my $unick = u_irc(${ $_[0] }, $mapping);
     
-    $self->{syncing_join}->{$unick}--;
-    delete $self->{syncing_join}->{$unick} if $self->{syncing_join}->{$unick} == 0;
-    $self->_flush_queue($self->{join_queue}->{$unick});
+    $self->{syncing_join}{$unick}--;
+    delete $self->{syncing_join}{$unick} if $self->{syncing_join}{$unick} == 0;
+    $self->_flush_queue($self->{join_queue}{$unick});
     return PCI_EAT_NONE;
 }
 
@@ -140,8 +140,8 @@ sub S_raw {
 
     # syncing_join me
     if ($input->{command} =~ /315|324|329|352|367|368/) {
-        if ($input->{params}->[1] =~ /[^#&+!]/) {
-            if ($self->{syncing_join}->{u_irc($input->{params}->[1], $mapping)}) {
+        if ($input->{params}[1] =~ /[^#&+!]/) {
+            if ($self->{syncing_join}{u_irc($input->{params}[1], $mapping)}) {
                 return PCI_EAT_PLUGIN;
             }
         }
@@ -149,15 +149,15 @@ sub S_raw {
 
     # syncing_join other
     if ($input->{command} eq '352') {
-        if ($self->{syncing_join}->{u_irc($input->{params}->[5], $mapping)}) {
+        if ($self->{syncing_join}{u_irc($input->{params}[5], $mapping)}) {
             return PCI_EAT_PLUGIN;
         }
     }
 
     # syncing_away
     if ($input->{command} =~ /315|352/) {
-        if ($input->{params}->[1] =~ /[^#&+!]/) {
-            if ($self->{syncing_away}->{u_irc($input->{params}->[1], $mapping)}) {
+        if ($input->{params}[1] =~ /[^#&+!]/) {
+            if ($self->{syncing_away}{u_irc($input->{params}[1], $mapping)}) {
                 return PCI_EAT_PLUGIN;
             }
         }
@@ -165,14 +165,14 @@ sub S_raw {
     
     # syncing_op invex
     if ($input->{command} =~ /346|347/) {
-        if ($self->{syncing_op}->{u_irc($input->{params}->[1], $mapping)}->{invex}) {
+        if ($self->{syncing_op}{u_irc($input->{params}[1], $mapping)}{invex}) {
             return PCI_EAT_PLUGIN;
         }
     }
     
     # syncing_op excepts
     if ($input->{command} =~ /348|349/) {
-        if ($self->{syncing_op}->{u_irc($input->{params}->[1], $mapping)}->{excepts}) {
+        if ($self->{syncing_op}{u_irc($input->{params}[1], $mapping)}{excepts}) {
             return PCI_EAT_PLUGIN;
         }
     }
@@ -184,11 +184,21 @@ sub _flush_queue {
     my ($self, $queue) = @_;
     return if !$queue;
 
-    for my $request (@$queue) {
+    while (my $request = shift @$queue) {
         my ($callback, $reply, $real_what, $args) = @{ $request };
         $callback->($_) for $self->$reply($real_what, @{ $args });
     }
-    @$queue = undef;
+
+    return;
+}
+
+sub is_syncing {
+    my ($self, $what) = @_;
+    my $mapping = $self->{irc}->isupport('CASEMAPPING');
+    my $uwhat = u_irc($what, $mapping);
+
+    return 1 if $self->{syncing_join}{$uwhat};
+    return;
 }
 
 sub enqueue {
@@ -197,27 +207,28 @@ sub enqueue {
     my $uwhat = u_irc($what, $mapping);
 
     if ($reply eq 'mode_reply') {
-        if (grep { defined && $_ eq 'e' } @args && $self->{syncing_op}->{$uwhat}->{excepts}) {
-            push @{ $self->{op_queue}->{$uwhat}->{excepts} }, [$callback, $reply, $what, \@args];
+        if (grep { defined && $_ eq 'e' } @args && $self->{syncing_op}{$uwhat}{excepts}) {
+            push @{ $self->{op_queue}{$uwhat}{excepts} }, [$callback, $reply, $what, \@args];
             return;
         }
-        elsif (grep { defined && $_ eq 'I' } @args && $self->{syncing_op}->{$uwhat}->{invex}) {
-            push @{ $self->{op_queue}->{$uwhat}->{invex} }, [$callback, $reply, $what, \@args];
+        elsif (grep { defined && $_ eq 'I' } @args && $self->{syncing_op}{$uwhat}{invex}) {
+            push @{ $self->{op_queue}{$uwhat}{invex} }, [$callback, $reply, $what, \@args];
             return;
         }
-        elsif ($self->{syncing_join}->{$uwhat}) {
-            push @{ $self->{join_queue}->{$uwhat} }, [$callback, $reply, $what, \@args];
+        elsif ($self->{syncing_join}{$uwhat}) {
+            push @{ $self->{join_queue}{$uwhat} }, [$callback, $reply, $what, \@args];
             return;
         }
     }
     elsif ($reply =~ /(?:who|names|topic)_reply/) {
-        if ($self->{syncing_join}->{$uwhat}) {
-            push @{ $self->{join_queue}->{$uwhat} }, [$callback, $reply, $what, \@args];
+        if ($self->{syncing_join}{$uwhat}) {
+            push @{ $self->{join_queue}{$uwhat} }, [$callback, $reply, $what, \@args];
             return;
         }
     }
 
     $callback->($_) for $self->$reply($what, @args);
+    return;
 }
 
 # handles /^TOPIC (\S+)$/ where $1 is a channel that we're on
@@ -259,13 +270,13 @@ sub names_reply {
         $prefix = '@' if $irc->is_channel_operator($chan, $nick);
         $prefix . $nick;
     } $irc->channel_list($chan);
-    
-    my $length = length($server) + bytes::length($chan) + bytes::length($me) + 11;
+
+    my $length = length($server) + length($chan) + length($me) + 11;
     my @results;
     my $nick_list = shift @nicks;
     
     for my $nick (@nicks) {
-        if (bytes::length("$nick_list $nick") + $length <= 510) {
+        if (length("$nick_list $nick") + $length <= 510) {
             $nick_list .= " $nick";
         }
         else {
@@ -381,7 +392,7 @@ provided by L<POE::Component::IRC::State|POE::Component::IRC::State>.
 
  use App::Bondage::State;
 
- $irc->plugin_add('State', App::Bondage::Client->new());
+ $irc->plugin_add('State', App::Bondage::State->new());
 
 =head1 DESCRIPTION
 
@@ -398,8 +409,8 @@ Another thing this plugin does is hide from clients all server replies
 elicited by L<POE::Component::IRC::State|POE::Component::IRC::State>'s
 information gathering.
 
-This plugin requires the IRC component to be L<POE::Component::IRC::State|POE::Component::IRC::State>
-or a subclass thereof.
+This plugin requires the IRC component to be
+L<POE::Component::IRC::State|POE::Component::IRC::State> or a subclass thereof.
 
 =head1 CONSTRUCTOR
 
@@ -407,8 +418,8 @@ or a subclass thereof.
 
 Takes no arguments.
 
-Returns a plugin object suitable for feeding to L<POE::Component::IRC|POE::Component::IRC>'s
-C<plugin_add()> method.
+Returns a plugin object suitable for feeding to
+L<POE::Component::IRC|POE::Component::IRC>'s C<plugin_add()> method.
 
 =head1 METHODS
 
@@ -456,6 +467,14 @@ Takes three arguments:
 A code reference which will be called for every line of response generated,
 the type of reply being asked for (e.g. 'who_reply'), and the arguments
 to the corresponding method.
+
+=head2 C<is_syncing>
+
+Takes one argument:
+
+An IRC channel.
+
+Returns 1 if the channel or nick is being synced, 0 otherwise.
 
 =head1 AUTHOR
 
