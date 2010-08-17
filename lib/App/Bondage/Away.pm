@@ -1,10 +1,14 @@
 package App::Bondage::Away;
+BEGIN {
+  $App::Bondage::Away::AUTHORITY = 'cpan:HINRIK';
+}
+BEGIN {
+  $App::Bondage::Away::VERSION = '0.4.5';
+}
 
 use strict;
-use warnings;
+use warnings FATAL => 'all';
 use POE::Component::IRC::Plugin qw( :ALL );
-
-our $VERSION = '1.1';
 
 sub new {
     my ($package, %self) = @_;
@@ -72,7 +76,8 @@ sub message {
 }
 
 1;
-__END__
+
+=encoding utf8
 
 =head1 NAME
 

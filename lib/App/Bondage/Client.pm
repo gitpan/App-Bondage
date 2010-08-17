@@ -1,14 +1,18 @@
 package App::Bondage::Client;
+BEGIN {
+  $App::Bondage::Client::AUTHORITY = 'cpan:HINRIK';
+}
+BEGIN {
+  $App::Bondage::Client::VERSION = '0.4.5';
+}
 
 use strict;
-use warnings;
+use warnings FATAL => 'all';
 use Carp;
 use POE qw(Filter::Line Filter::Stackable);
 use POE::Component::IRC::Common qw( u_irc );
 use POE::Component::IRC::Plugin qw( :ALL );
 use POE::Filter::IRCD;
-
-our $VERSION = '1.3';
 
 sub new {
     my ($package, %self) = @_;
@@ -182,7 +186,8 @@ sub put {
 }
 
 1;
-__END__
+
+=encoding utf8
 
 =head1 NAME
 

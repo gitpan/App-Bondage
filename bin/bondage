@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 
 use strict;
-use warnings;
+use warnings FATAL => 'all';
 use App::Bondage;
 use Digest::MD5 qw(md5_hex);
 use Getopt::Long qw(:config auto_help);
@@ -12,7 +12,14 @@ use POE::Component::Daemon;
 GetOptions(
     'c|crypt'     => \&encrypt_pass,
     'd|debug'     => \my $debug,
-    'v|version'   => sub { print "Bondage $App::Bondage::VERSION, $App::Bondage::HOMEPAGE\n"; exit },
+    'v|version'   => sub {
+       no strict 'vars';
+        my $version = defined $App::Bondage::VERSION
+            ? "Bondage $App::Bondage::VERSION, $App::Bondage::HOMEPAGE"
+            : 'Bondage dev-git';
+        print $version, "\n";
+        exit;
+    },
     'w|workdir=s' => \(my $work_dir = "$ENV{HOME}/.bondage"),
 ) or pod2usage();
 
@@ -30,6 +37,8 @@ sub encrypt_pass {
     print "\nEncrypted password: " . md5_hex($password, $App::Bondage::CRYPT_SALT) . "\n";
     exit;
 }
+
+=encoding utf8
 
 =head1 NAME
 

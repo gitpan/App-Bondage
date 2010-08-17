@@ -1,24 +1,59 @@
+
 use strict;
 use warnings;
-use inc::Module::Install;
-use 5.006;
 
-name           ('App-Bondage');
-perl_version   ('5.006');
-author         ('Hinrik Örn Sigurðsson <hinrik.sig@gmail.com>');
-abstract_from  ('lib/App/Bondage.pm');
-version_from   ('lib/App/Bondage.pm');
-install_script ('script/bondage');
-license        ('perl');
-githubmeta     ();
-requires       ('POE::Component::Client::DNS' => '0.99');
-requires       ('POE::Component::Daemon'      => '0');
-requires       ('POE::Component::IRC'         => '6.06');
-requires       ('POE::Filter::IRCD'           => '2.34');
-requires       ('YAML::XS'                    => '0');
-requires       ('Tie::File'                   => '0');
-requires       ('Digest::MD5'                 => '0');
-test_requires  ('Test::More'                  => '0');
-test_requires  ('Test::Script'                => '0');
-tests_recursive();
-WriteAll();
+
+
+use ExtUtils::MakeMaker 6.31;
+
+
+
+my %WriteMakefileArgs = (
+  'ABSTRACT' => 'A featureful IRC bouncer based on POE::Component::IRC',
+  'AUTHOR' => 'Hinrik Örn Sigurðsson <hinrik.sig@gmail.com>',
+  'BUILD_REQUIRES' => {
+    'Test::Script' => '1.07'
+  },
+  'CONFIGURE_REQUIRES' => {
+    'ExtUtils::MakeMaker' => '6.31'
+  },
+  'DISTNAME' => 'App-Bondage',
+  'EXE_FILES' => [
+    'bin/bondage'
+  ],
+  'LICENSE' => 'perl',
+  'NAME' => 'App::Bondage',
+  'PREREQ_PM' => {
+    'POE::Component::Client::DNS' => '0.99',
+    'POE::Component::Daemon' => '0',
+    'POE::Component::IRC' => '6.06',
+    'POE::Filter::IRCD' => '2.34',
+    'YAML::XS' => '0'
+  },
+  'VERSION' => '0.4.5',
+  'test' => {
+    'TESTS' => 't/*.t'
+  }
+);
+
+
+unless ( eval { ExtUtils::MakeMaker->VERSION(6.56) } ) {
+  my $br = delete $WriteMakefileArgs{BUILD_REQUIRES};
+  my $pp = $WriteMakefileArgs{PREREQ_PM};
+  for my $mod ( keys %$br ) {
+    if ( exists $pp->{$mod} ) {
+      $pp->{$mod} = $br->{$mod} if $br->{$mod} > $pp->{$mod};
+    }
+    else {
+      $pp->{$mod} = $br->{$mod};
+    }
+  }
+}
+
+delete $WriteMakefileArgs{CONFIGURE_REQUIRES}
+  unless eval { ExtUtils::MakeMaker->VERSION(6.52) };
+
+WriteMakefile(%WriteMakefileArgs);
+
+
+
