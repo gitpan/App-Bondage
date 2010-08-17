@@ -30,7 +30,7 @@ my %WriteMakefileArgs = (
     'POE::Filter::IRCD' => '2.34',
     'YAML::XS' => '0'
   },
-  'VERSION' => '0.4.5',
+  'VERSION' => '0.4.6',
   'test' => {
     'TESTS' => 't/*.t'
   }

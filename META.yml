@@ -29,5 +29,5 @@ resources:
   homepage: http://search.cpan.org/dist/App-Bondage/
   license: http://dev.perl.org/licenses/
   repository: git://github.com/hinrik/app-bondage.git
-version: 0.4.5
+version: 0.4.6
 x_authority: cpan:HINRIK
