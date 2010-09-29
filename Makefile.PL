@@ -25,12 +25,12 @@ my %WriteMakefileArgs = (
   'NAME' => 'App::Bondage',
   'PREREQ_PM' => {
     'POE::Component::Client::DNS' => '0.99',
-    'POE::Component::Daemon' => '0',
     'POE::Component::IRC' => '6.06',
     'POE::Filter::IRCD' => '2.34',
+    'Proc::Daemon' => '0',
     'YAML::XS' => '0'
   },
-  'VERSION' => '0.4.6',
+  'VERSION' => '0.4.7',
   'test' => {
     'TESTS' => 't/*.t'
   }

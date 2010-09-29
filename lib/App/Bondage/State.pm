@@ -3,11 +3,11 @@ BEGIN {
   $App::Bondage::State::AUTHORITY = 'cpan:HINRIK';
 }
 BEGIN {
-  $App::Bondage::State::VERSION = '0.4.6';
+  $App::Bondage::State::VERSION = '0.4.7';
 }
 
 use strict;
-use warnings; #FATAL => 'all';
+use warnings FATAL => 'all';
 use POE::Filter::IRCD;
 use POE::Component::IRC::Common qw(parse_user u_irc);
 use POE::Component::IRC::Plugin qw(:ALL);

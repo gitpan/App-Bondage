@@ -4,7 +4,7 @@
       "Hinrik \u00c3\u0096rn Sigur\u00c3\u00b0sson <hinrik.sig@gmail.com>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Dist::Zilla version 4.101612, CPAN::Meta::Converter version 2.101670",
+   "generated_by" : "Dist::Zilla version 4.102341, CPAN::Meta::Converter version 2.101670",
    "license" : [
       "perl_5"
    ],
@@ -34,9 +34,9 @@
       "runtime" : {
          "requires" : {
             "POE::Component::Client::DNS" : "0.99",
-            "POE::Component::Daemon" : 0,
             "POE::Component::IRC" : "6.06",
             "POE::Filter::IRCD" : "2.34",
+            "Proc::Daemon" : 0,
             "YAML::XS" : 0
          }
       }
@@ -57,7 +57,7 @@
          "web" : "http://github.com/hinrik/app-bondage"
       }
    },
-   "version" : "0.4.6",
+   "version" : "0.4.7",
    "x_authority" : "cpan:HINRIK"
 }
 

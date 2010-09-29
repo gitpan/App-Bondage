@@ -3,7 +3,7 @@ BEGIN {
   $App::Bondage::AUTHORITY = 'cpan:HINRIK';
 }
 BEGIN {
-  $App::Bondage::VERSION = '0.4.6';
+  $App::Bondage::VERSION = '0.4.7';
 }
 
 use strict;
