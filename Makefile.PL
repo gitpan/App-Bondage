@@ -30,7 +30,7 @@ my %WriteMakefileArgs = (
     'Proc::Daemon' => '0',
     'YAML::XS' => '0'
   },
-  'VERSION' => '0.4.7',
+  'VERSION' => '0.4.8',
   'test' => {
     'TESTS' => 't/*.t'
   }

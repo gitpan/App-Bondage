@@ -3,7 +3,7 @@ BEGIN {
   $App::Bondage::State::AUTHORITY = 'cpan:HINRIK';
 }
 BEGIN {
-  $App::Bondage::State::VERSION = '0.4.7';
+  $App::Bondage::State::VERSION = '0.4.8';
 }
 
 use strict;
@@ -317,7 +317,10 @@ sub who_reply {
         $status .= '%' if $irc->is_channel_halfop($who, $nick);
         $status .= '+' if $irc->has_channel_voice($who, $nick) && !$irc->is_channel_operator($who, $nick);
             
-        my ($real, $user_server, $hops) = @{ $irc->nick_info($nick) }{qw(Real Server Hops)};
+        my $info = $irc->nick_info($nick);
+        my $real        = defined $info->{Real}   ? $info->{Real} : '';
+        my $user_server = defined $info->{Server} ? $info->{Server} : '*';
+        my $hops        = defined $info->{Hops}   ? $info->{Hops} : '*';
         push @results, ":$server 352 $me $prefix $user $host $user_server $nick $status :$hops $real";
     }
 
