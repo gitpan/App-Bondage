@@ -2,9 +2,6 @@ package App::Bondage::Recall;
 BEGIN {
   $App::Bondage::Recall::AUTHORITY = 'cpan:HINRIK';
 }
-BEGIN {
-  $App::Bondage::Recall::VERSION = '0.4.8';
-}
 
 use strict;
 use warnings FATAL => 'all';
@@ -14,6 +11,8 @@ use POE::Component::IRC::Plugin qw( :ALL );
 use POE::Component::IRC::Plugin::BotTraffic;
 use POE::Filter::IRCD;
 use Tie::File;
+
+our $VERSION = '1.5';
 
 sub new {
     my ($package, %self) = @_;

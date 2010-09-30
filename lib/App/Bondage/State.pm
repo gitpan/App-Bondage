@@ -2,15 +2,14 @@ package App::Bondage::State;
 BEGIN {
   $App::Bondage::State::AUTHORITY = 'cpan:HINRIK';
 }
-BEGIN {
-  $App::Bondage::State::VERSION = '0.4.8';
-}
 
 use strict;
 use warnings FATAL => 'all';
 use POE::Filter::IRCD;
 use POE::Component::IRC::Common qw(parse_user u_irc);
 use POE::Component::IRC::Plugin qw(:ALL);
+
+our $VERSION = '1.0';
 
 sub new {
     my ($package) = @_;
