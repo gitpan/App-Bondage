@@ -1,3 +1,6 @@
+0.4.11 Thu Oct 7 01:06:47 GMT 2010
+    - Support the new CAP instead of CAPAB on FreeNode
+
 0.4.10 Sun Oct 3 15:31:37 GMT 2010
     - After daemonizing, notify the POE kernel that we have forked
 
